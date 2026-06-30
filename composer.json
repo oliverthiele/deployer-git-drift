@@ -1,0 +1,30 @@
+{
+    "name": "oliver-thiele/deployer-git-drift",
+    "description": "Deployer recipe: detect and warn about direct server-side file changes before deployment",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Oliver Thiele"
+        }
+    ],
+    "require": {
+        "php": ">=8.2",
+        "deployer/deployer": "^7.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "OliverThiele\\DeployerGitDrift\\": "src/"
+        }
+    },
+    "keywords": [
+        "deployer",
+        "deployment",
+        "git",
+        "drift",
+        "server",
+        "monitoring"
+    ],
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
