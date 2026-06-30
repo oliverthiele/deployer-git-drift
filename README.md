@@ -27,8 +27,10 @@ This recipe solves the problem by:
 
 ## Installation
 
+While in alpha, you need to allow alpha stability explicitly:
+
 ```bash
-composer require --dev oliver-thiele/deployer-git-drift
+composer require --dev oliver-thiele/deployer-git-drift:@alpha
 ```
 
 ## Usage
