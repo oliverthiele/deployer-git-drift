@@ -25,7 +25,7 @@ task('git-drift:init', function (): void {
 
         writeln('<info>✓ Git drift tracking initialized</info>');
     } catch (\Throwable $exception) {
-        writeln('<warning>⚠ Git drift init failed (non-fatal): ' . $exception->getMessage() . '</warning>');
+        writeln('<comment>⚠ Git drift init failed (non-fatal): ' . $exception->getMessage() . '</comment>');
     }
 })->desc('Initialize Git in release directory for drift tracking');
 
@@ -36,7 +36,7 @@ task('git-drift:check', function (): void {
     }
 
     if (!test('[ -d "{{current_path}}/.git" ]')) {
-        writeln('<warning>⚠ Git not initialized in current release — drift check skipped.</warning>');
+        writeln('<comment>⚠ Git not initialized in current release — drift check skipped.</comment>');
         writeln('<comment>After the first deploy with git-drift:init, subsequent deployments will be checked.</comment>');
         return;
     }
@@ -76,7 +76,7 @@ task('git-drift:check', function (): void {
         throw new \RuntimeException('Deployment aborted: unresolved server drift.');
     }
 
-    writeln('<warning>⚠ Continuing deployment — server-side changes will be overwritten.</warning>');
+    writeln('<comment>⚠ Continuing deployment — server-side changes will be overwritten.</comment>');
 })->desc('Check for server-side file changes before deployment');
 
 task('git-drift:status', function (): void {
@@ -86,7 +86,7 @@ task('git-drift:status', function (): void {
     }
 
     if (!test('[ -d "{{current_path}}/.git" ]')) {
-        writeln('<warning>⚠ Git not initialized in current release.</warning>');
+        writeln('<comment>⚠ Git not initialized in current release.</comment>');
         writeln('<comment>Deploy once with git-drift:init enabled to start tracking.</comment>');
         return;
     }
