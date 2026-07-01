@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5-alpha6] — 2026-07-01
+
+### Changed
+
+- Batch all `git-drift` index reconciliation into a constant number of remote calls (`git ls-tree`, `git update-index --index-info`, `git update-index --skip-worktree --stdin`) instead of up to three `run()` round-trips per affected file, so releases with many shared/export-ignored paths no longer scale linearly in deploy time
+- Removed alpha-specific installation instructions and the hardcoded version number from the README's status banner, and clarified that shared symlinks are also written to `.git/info/exclude` automatically
+
 ## [0.1.4-alpha5] — 2026-07-01
 
 ### Added
