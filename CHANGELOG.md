@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3-alpha4] — 2026-07-01
+
+### Fixed
+
+- Add `--ignore-submodules=all` to `git diff --stat HEAD` in `git-drift:check` and `git-drift:status` for consistent submodule handling
+
 ## [0.1.2-alpha3] — 2026-06-30
 
 ### Fixed
