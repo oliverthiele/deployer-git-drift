@@ -21,42 +21,28 @@ set('git_drift_skip_worktree_paths', []);
  * Gathering the file lists and applying the result are Git/Deployer I/O and live here.
  * Deciding which files need --skip-worktree is pure computation and lives in
  * GitDriftIndexPlanner, which can be unit-tested without a real Git repository.
+ *
+ * Every step below is batched into a single `run()` call regardless of how many files are
+ * involved — each `run()` is a synchronous round-trip to the release host, so one call per
+ * file would scale badly on releases with many shared/export-ignored paths.
  */
 function gitDriftReconcileIndex(string $path): void
 {
     $sharedPaths = array_map('strval', array_merge((array)get('shared_dirs', []), (array)get('shared_files', [])));
 
-    $trackedFiles = gitDriftLines(run("git -C $path ls-tree -r HEAD --name-only 2>/dev/null || true"));
+    // "git ls-tree -r HEAD" (mode, type, hash, path) doubles as the plain tracked-file list
+    // for the planner and as the source of hashes needed to restore index entries below —
+    // one call instead of a separate --name-only call plus a rev-parse per file.
+    $trackedFileInfo = gitDriftParseTrackedFiles(run("git -C $path ls-tree -r HEAD 2>/dev/null || true"));
+    $trackedFiles = array_keys($trackedFileInfo);
     $archivedFiles = gitDriftLines(run("git -C $path archive HEAD 2>/dev/null | tar -t 2>/dev/null || true"));
     $manualSkipWorktreePaths = array_map('strval', (array)get('git_drift_skip_worktree_paths', []));
 
     $plan = GitDriftIndexPlanner::plan($sharedPaths, $trackedFiles, $archivedFiles, $manualSkipWorktreePaths);
 
-    foreach ($plan->excludeEntries as $excludeEntry) {
-        // The shared symlink itself must not show up as untracked. No trailing slash:
-        // Deployer creates shared dirs as symlinks, and Git's "dir/" exclude syntax only
-        // matches real directories, never a symlink of the same name.
-        run(
-            'grep -qxF ' . escapeshellarg($excludeEntry) . " $path/.git/info/exclude 2>/dev/null || echo "
-            . escapeshellarg($excludeEntry) . " >> $path/.git/info/exclude"
-        );
-    }
-
-    foreach ($plan->skipWorktreePaths as $file) {
-        // If a previous run's index entry is gone (e.g. after `git rm --cached`), restore it
-        // as an index-only entry from HEAD first — --skip-worktree requires an existing entry.
-        $inIndex = trim(run("git -C $path ls-files " . escapeshellarg($file) . ' 2>/dev/null || true'));
-        if (empty($inIndex)) {
-            $hash = trim(run("git -C $path rev-parse HEAD:" . escapeshellarg($file) . ' 2>/dev/null || true'));
-            if (strlen($hash) === 40) {
-                run(
-                    "git -C $path update-index --add --info-only --cacheinfo 100644,$hash,"
-                    . escapeshellarg($file) . ' 2>/dev/null || true'
-                );
-            }
-        }
-        run("git -C $path update-index --skip-worktree " . escapeshellarg($file) . ' 2>/dev/null || true');
-    }
+    gitDriftAppendMissingExcludeEntries($path, $plan->excludeEntries);
+    gitDriftRestoreIndexEntries($path, $plan->skipWorktreePaths, $trackedFileInfo);
+    gitDriftMarkSkipWorktree($path, $plan->skipWorktreePaths);
 }
 
 /**
@@ -65,6 +51,95 @@ function gitDriftReconcileIndex(string $path): void
 function gitDriftLines(string $output): array
 {
     return array_values(array_filter(array_map('trim', explode("\n", trim($output)))));
+}
+
+/**
+ * Parses `git ls-tree -r HEAD` output ("<mode> <type> <hash>\t<path>" per line).
+ *
+ * @return array<string, array{0: string, 1: string, 2: string}> Path => [mode, type, hash]
+ */
+function gitDriftParseTrackedFiles(string $output): array
+{
+    $files = [];
+    foreach (gitDriftLines($output) as $line) {
+        $parts = explode("\t", $line, 2);
+        if (count($parts) !== 2) {
+            continue;
+        }
+        [$meta, $file] = $parts;
+
+        $metaParts = explode(' ', $meta, 3);
+        if (count($metaParts) !== 3) {
+            continue;
+        }
+
+        $files[$file] = [$metaParts[0], $metaParts[1], $metaParts[2]];
+    }
+
+    return $files;
+}
+
+/**
+ * The shared symlink itself must not show up as untracked. No trailing slash: Deployer
+ * creates shared dirs as symlinks, and Git's "dir/" exclude syntax only matches real
+ * directories, never a symlink of the same name.
+ *
+ * @param string[] $excludeEntries
+ */
+function gitDriftAppendMissingExcludeEntries(string $path, array $excludeEntries): void
+{
+    if ($excludeEntries === []) {
+        return;
+    }
+
+    $existing = array_flip(gitDriftLines(run("cat $path/.git/info/exclude 2>/dev/null || true")));
+    $missing = array_values(array_filter($excludeEntries, static fn (string $entry): bool => !isset($existing[$entry])));
+
+    if ($missing === []) {
+        return;
+    }
+
+    $payload = implode("\n", $missing) . "\n";
+    run('printf \'%s\' ' . escapeshellarg($payload) . " >> $path/.git/info/exclude");
+}
+
+/**
+ * Restores index entries removed by a legacy `git rm --cached` (from an older version of
+ * this recipe) before they can be marked --skip-worktree, using the mode/type/hash already
+ * known from `git ls-tree` — no per-file `git rev-parse` needed.
+ *
+ * @param string[] $skipWorktreePaths
+ * @param array<string, array{0: string, 1: string, 2: string}> $trackedFileInfo
+ */
+function gitDriftRestoreIndexEntries(string $path, array $skipWorktreePaths, array $trackedFileInfo): void
+{
+    $lines = [];
+    foreach ($skipWorktreePaths as $file) {
+        if (isset($trackedFileInfo[$file])) {
+            [$mode, $type, $hash] = $trackedFileInfo[$file];
+            $lines[] = "$mode $type $hash\t$file";
+        }
+    }
+
+    if ($lines === []) {
+        return;
+    }
+
+    $payload = implode("\n", $lines) . "\n";
+    run('printf \'%s\' ' . escapeshellarg($payload) . " | git -C $path update-index --add --index-info");
+}
+
+/**
+ * @param string[] $skipWorktreePaths
+ */
+function gitDriftMarkSkipWorktree(string $path, array $skipWorktreePaths): void
+{
+    if ($skipWorktreePaths === []) {
+        return;
+    }
+
+    $payload = implode("\n", $skipWorktreePaths) . "\n";
+    run('printf \'%s\' ' . escapeshellarg($payload) . " | git -C $path update-index --skip-worktree --stdin");
 }
 
 task('git-drift:init', function (): void {
