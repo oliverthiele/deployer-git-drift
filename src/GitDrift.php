@@ -52,7 +52,7 @@ task('git-drift:check', function (): void {
     writeln('<error>⚠ Server drift detected:</error>');
     writeln('');
 
-    $diffStatOutput = run('git -C {{current_path}} diff --stat HEAD');
+    $diffStatOutput = run('git -C {{current_path}} diff --stat HEAD --ignore-submodules=all');
     if (!empty(trim($diffStatOutput))) {
         writeln($diffStatOutput);
     }
@@ -96,7 +96,7 @@ task('git-drift:status', function (): void {
     writeln('');
     writeln(run('git -C {{current_path}} status --ignore-submodules=all'));
 
-    $diffStatOutput = run('git -C {{current_path}} diff --stat HEAD');
+    $diffStatOutput = run('git -C {{current_path}} diff --stat HEAD --ignore-submodules=all');
     if (!empty(trim($diffStatOutput))) {
         writeln('');
         writeln($diffStatOutput);
