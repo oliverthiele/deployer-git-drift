@@ -1,2 +1,8 @@
 .idea/
 vendor/
+composer.lock
+.php-cs-fixer.cache
+.phpunit.result.cache
+/.ddev/.gitignore
+/.ddev/config.local.yaml
+/.ddev/commands/**/*

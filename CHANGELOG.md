@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Automatic drift-suppression for `shared_dirs`/`shared_files`: tracked files shadowed by Deployer's shared symlinks are detected from Deployer's own config and marked `--skip-worktree`, without any project-specific path list
+- Automatic drift-suppression for `.gitattributes` `export-ignore`d files, detected via a `git archive` comparison against the tracked file list
+- `git_drift_skip_worktree_paths` option for manually marking additional tracked files (e.g. server-rewritten config) as expected to differ
+
+### Changed
+
+- `git-drift:check` and `git-drift:status` now reconcile the release index before reading status, replacing the need for project-level workaround tasks previously required for shared directories and export-ignored files
+- Raised minimum PHP version from 8.2 to 8.4
+- Extracted the skip-worktree decision logic into `GitDriftIndexPlanner`, a pure, unit-tested class decoupled from Deployer's runtime
+- Added PHPStan (level 6), PHP-CS-Fixer, and PHPUnit as dev tooling
+
 ## [0.1.3-alpha4] — 2026-07-01
 
 ### Fixed
