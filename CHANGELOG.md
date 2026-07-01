@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-07-01
+
+### Changed
+
+- First release without an alpha/beta pre-release qualifier. Verified in real deployments (TYPO3, shared `data`/`.htaccess`/export-ignored `.gitattributes`) with no false-positive drift and correct detection of genuine server-side changes. Still pre-1.0: task names and configuration keys may change based on feedback from wider use.
+
 ## [0.1.5-alpha6] — 2026-07-01
 
 ### Changed
