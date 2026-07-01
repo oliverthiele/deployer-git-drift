@@ -7,7 +7,7 @@ Deployer recipe that detects and warns about files modified directly on the serv
 [![License](https://img.shields.io/packagist/l/oliver-thiele/deployer-git-drift.svg)](LICENSE)
 [![Changelog](https://img.shields.io/badge/Changelog-CHANGELOG.md-blue.svg)](CHANGELOG.md)
 
-> **Early Alpha (v0.1.3-alpha4)** — This package is functional but under active development. Task names and configuration keys may change before v1.0. Use in production at your own risk.
+> **Early Alpha (v0.1.4-alpha5)** — This package is functional but under active development. Task names and configuration keys may change before v1.0. Use in production at your own risk.
 
 ## The Problem
 
