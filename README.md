@@ -2,9 +2,9 @@
 
 Deployer recipe that detects and warns about files modified directly on the server (via FTP, SFTP, or SSH) before they are silently overwritten by the next deployment.
 
-[![Packagist Version](https://img.shields.io/packagist/v/oliver-thiele/deployer-git-drift.svg)](https://packagist.org/packages/oliver-thiele/deployer-git-drift)
-[![PHP](https://img.shields.io/packagist/dependency-v/oliver-thiele/deployer-git-drift/php.svg)](https://php.net/)
-[![License](https://img.shields.io/packagist/l/oliver-thiele/deployer-git-drift.svg)](LICENSE)
+[![Packagist Version](https://img.shields.io/packagist/v/oliverthiele/deployer-git-drift.svg)](https://packagist.org/packages/oliverthiele/deployer-git-drift)
+[![PHP](https://img.shields.io/packagist/dependency-v/oliverthiele/deployer-git-drift/php.svg)](https://php.net/)
+[![License](https://img.shields.io/packagist/l/oliverthiele/deployer-git-drift.svg)](LICENSE)
 [![Changelog](https://img.shields.io/badge/Changelog-CHANGELOG.md-blue.svg)](CHANGELOG.md)
 
 > **Pre-1.0** — This package is under active development. Task names and configuration keys may still change before v1.0. Pin to an exact version and review the [CHANGELOG](CHANGELOG.md) before upgrading.
@@ -28,7 +28,7 @@ This recipe solves the problem by:
 ## Installation
 
 ```bash
-composer require --dev oliver-thiele/deployer-git-drift
+composer require --dev oliverthiele/deployer-git-drift
 ```
 
 ## Usage
@@ -37,7 +37,7 @@ In your `deploy.php`:
 
 ```php
 require 'recipe/common.php';
-require __DIR__ . '/vendor/oliver-thiele/deployer-git-drift/src/GitDrift.php';
+require __DIR__ . '/vendor/oliverthiele/deployer-git-drift/src/GitDrift.php';
 
 // Hook into the deployment flow
 after('deploy:symlink', 'git-drift:init');

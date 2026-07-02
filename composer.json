@@ -1,5 +1,5 @@
 {
-    "name": "oliver-thiele/deployer-git-drift",
+    "name": "oliverthiele/deployer-git-drift",
     "description": "Deployer recipe: detect and warn about direct server-side file changes before deployment",
     "type": "library",
     "license": "MIT",
