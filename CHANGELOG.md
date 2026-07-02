@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-07-02
+
+### Changed
+
+- **BREAKING:** Package renamed from `oliver-thiele/deployer-git-drift` to `oliverthiele/deployer-git-drift` to match the vendor namespace used by all other packages published under this account. Update your `composer.json` require accordingly. The old `oliver-thiele/deployer-git-drift` package will be removed from Packagist.
+
 ## [0.2.0] — 2026-07-01
 
 ### Changed
