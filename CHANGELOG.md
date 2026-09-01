@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-09-01
+
 ### Added
 
 - `git-drift:reset` rebuilds the baseline of the current release without a deployment, for releases where `git-drift:init` could not reach the repository and drift tracking never started. It re-fetches the deployed branch and rebuilds the baseline from it; the working tree is left untouched, so server-side changes that were already present remain visible as drift instead of being accepted
