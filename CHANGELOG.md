@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `git-drift:init` no longer leaves a `.git` without a HEAD behind when one of its own steps fails (missing deploy key on the server, empty `{{branch}}`). Init failures are non-fatal by design, so such a release was reported as "already initialized" on every later deploy, while `git-drift:check` read the whole release as untracked drift and then aborted the deployment with `fatal: ambiguous argument 'HEAD'`. The baseline is now built in a temporary Git directory and moved into place only once HEAD resolves, and a HEAD-less `.git` left behind by an earlier version is replaced by the next `git-drift:init`
+- `git-drift:check` and `git-drift:status` verify that HEAD resolves instead of only testing for a `.git` directory, and skip with a notice when it does not
+
 ## [0.2.1] — 2026-07-02
 
 ### Changed

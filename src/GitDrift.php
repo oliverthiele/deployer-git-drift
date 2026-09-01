@@ -142,17 +142,61 @@ function gitDriftMarkSkipWorktree(string $path, array $skipWorktreePaths): void
     run('printf \'%s\' ' . escapeshellarg($payload) . " | git -C $path update-index --skip-worktree --stdin");
 }
 
+/**
+ * A release can hold a .git that is unusable rather than absent, so testing for the
+ * directory alone is not enough — see gitDriftCreateBaseline() for how that happens.
+ * Without a resolvable HEAD, `git status` reports the whole release as untracked and
+ * `git diff HEAD` aborts with "ambiguous argument 'HEAD'".
+ */
+function gitDriftHasBaseline(string $path): bool
+{
+    return test("[ -d \"$path/.git\" ] && git -C \"$path\" rev-parse --verify --quiet HEAD > /dev/null 2>&1");
+}
+
+/**
+ * Builds the drift baseline in a temporary Git directory and moves it into place only
+ * once HEAD resolves.
+ *
+ * Init failures are deliberately non-fatal — drift tracking must never break a
+ * deployment — so every step has to leave the release in a state the next run can
+ * recover from. Initializing .git in place does not: a fetch that fails (missing deploy
+ * key on the server, empty {{branch}}) leaves a repository behind that never got a HEAD,
+ * which init then reports as "already initialized" while check reads the entire release
+ * as drift and aborts. Nothing is written to .git here until the baseline is complete,
+ * and a HEAD-less .git left behind by an older version is replaced on the way.
+ *
+ * core.worktree is unset again because --work-tree records it as an absolute path; the
+ * result is then byte-for-byte what a plain `git init` inside the release produces.
+ */
+function gitDriftCreateBaseline(string $path): void
+{
+    $git = "git --git-dir=$path/.git.tmp --work-tree=$path";
+
+    run("rm -rf $path/.git.tmp");
+    run("$git init --quiet");
+    run("$git remote add origin {{repository}}");
+    run("$git fetch origin {{branch}} --depth=1 --quiet");
+    run("$git reset FETCH_HEAD --quiet");
+
+    if (!test("$git rev-parse --verify --quiet HEAD > /dev/null 2>&1")) {
+        throw new \RuntimeException(sprintf(
+            'fetched branch "%s" produced no HEAD',
+            (string)get('branch', '')
+        ));
+    }
+
+    run("git --git-dir=$path/.git.tmp config --unset core.worktree");
+    run("rm -rf $path/.git && mv $path/.git.tmp $path/.git");
+}
+
 task('git-drift:init', function (): void {
     try {
-        if (test('[ -d "{{release_path}}/.git" ]')) {
+        if (gitDriftHasBaseline('{{release_path}}')) {
             writeln('<info>✓ Git drift tracking already initialized</info>');
             return;
         }
 
-        run('git -C {{release_path}} init --quiet');
-        run('git -C {{release_path}} remote add origin {{repository}}');
-        run('git -C {{release_path}} fetch origin {{branch}} --depth=1 --quiet');
-        run('git -C {{release_path}} reset FETCH_HEAD --quiet');
+        gitDriftCreateBaseline('{{release_path}}');
 
         foreach ((array)get('git_drift_ignore_paths') as $ignoredPath) {
             run('echo ' . escapeshellarg((string)$ignoredPath) . ' >> {{release_path}}/.git/info/exclude');
@@ -172,8 +216,8 @@ task('git-drift:check', function (): void {
         return;
     }
 
-    if (!test('[ -d "{{current_path}}/.git" ]')) {
-        writeln('<comment>⚠ Git not initialized in current release — drift check skipped.</comment>');
+    if (!gitDriftHasBaseline('{{current_path}}')) {
+        writeln('<comment>⚠ No usable Git baseline in current release — drift check skipped.</comment>');
         writeln('<comment>After the first deploy with git-drift:init, subsequent deployments will be checked.</comment>');
         return;
     }
@@ -224,8 +268,8 @@ task('git-drift:status', function (): void {
         return;
     }
 
-    if (!test('[ -d "{{current_path}}/.git" ]')) {
-        writeln('<comment>⚠ Git not initialized in current release.</comment>');
+    if (!gitDriftHasBaseline('{{current_path}}')) {
+        writeln('<comment>⚠ No usable Git baseline in current release.</comment>');
         writeln('<comment>Deploy once with git-drift:init enabled to start tracking.</comment>');
         return;
     }
