@@ -204,6 +204,22 @@ function gitDriftCreateBaseline(string $path): void
     run("rm -rf $path/.git && mv $path/.git.tmp $path/.git");
 }
 
+/**
+ * The three steps that turn a release directory into a tracked baseline: the repository
+ * itself, the project's own ignore paths, and the index reconciliation that suppresses
+ * shared and export-ignored files.
+ *
+ * git_drift_ignore_paths goes through the same append-if-missing helper as the
+ * automatically derived entries, so re-running this over an existing release neither
+ * duplicates exclude lines nor costs one round-trip per configured path.
+ */
+function gitDriftApplyBaseline(string $path): void
+{
+    gitDriftCreateBaseline($path);
+    gitDriftAppendMissingExcludeEntries($path, array_map('strval', (array)get('git_drift_ignore_paths', [])));
+    gitDriftReconcileIndex($path);
+}
+
 task('git-drift:init', function (): void {
     try {
         if (gitDriftHasBaseline('{{release_path}}')) {
@@ -211,13 +227,7 @@ task('git-drift:init', function (): void {
             return;
         }
 
-        gitDriftCreateBaseline('{{release_path}}');
-
-        foreach ((array)get('git_drift_ignore_paths') as $ignoredPath) {
-            run('echo ' . escapeshellarg((string)$ignoredPath) . ' >> {{release_path}}/.git/info/exclude');
-        }
-
-        gitDriftReconcileIndex('{{release_path}}');
+        gitDriftApplyBaseline('{{release_path}}');
 
         writeln('<info>✓ Git drift tracking initialized</info>');
     } catch (\Throwable $exception) {
@@ -302,3 +312,24 @@ task('git-drift:status', function (): void {
         writeln($diffStatOutput);
     }
 })->desc('Show current server drift status without deploying');
+
+task('git-drift:reset', function (): void {
+    if (!test('[ -e "{{current_path}}" ]')) {
+        throw new \RuntimeException('No current release — nothing to reset.');
+    }
+
+    // Unlike init this is invoked deliberately, so a failure must surface instead of
+    // being swallowed: the whole point of the task is to find out whether the baseline
+    // can be built at all.
+    gitDriftApplyBaseline('{{current_path}}');
+
+    writeln('<info>✓ Git drift baseline rebuilt from {{branch}}</info>');
+
+    // Only the baseline is rebuilt, never the working tree — server-side changes that
+    // were already there stay visible as drift. Saying so here keeps the task from
+    // being mistaken for a way to accept them.
+    $statusOutput = run('git -C {{current_path}} status --porcelain --ignore-submodules=all');
+    if (!empty(trim($statusOutput))) {
+        writeln('<comment>⚠ The release still differs from the rebuilt baseline — run git-drift:status for details.</comment>');
+    }
+})->desc('Rebuild the drift baseline of the current release without deploying');

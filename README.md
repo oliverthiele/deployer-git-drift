@@ -79,12 +79,27 @@ set('git_drift_skip_worktree_paths', [
 | `git-drift:init` | Initialize Git tracking in the release directory after deployment |
 | `git-drift:check` | Check for drift before deployment — warns or aborts |
 | `git-drift:status` | Show drift status without deploying |
+| `git-drift:reset` | Rebuild the baseline of the current release without deploying |
 
 Run the status check manually at any time:
 
 ```bash
 dep git-drift:status production
 ```
+
+### Resetting the baseline
+
+If `git-drift:init` could not reach the repository on the first deploy, the release has no
+baseline and drift tracking never starts. Once the cause is fixed (deploy key, SSH host
+key), the baseline can be built without waiting for the next deployment:
+
+```bash
+dep git-drift:reset production
+```
+
+This re-fetches the deployed branch and rebuilds the baseline from it. It does **not**
+accept existing server-side changes — only the baseline is rebuilt, never the working
+tree, so files that already differ keep showing up as drift afterwards.
 
 ## Example Output
 

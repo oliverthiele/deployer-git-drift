@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `git-drift:reset` rebuilds the baseline of the current release without a deployment, for releases where `git-drift:init` could not reach the repository and drift tracking never started. It re-fetches the deployed branch and rebuilds the baseline from it; the working tree is left untouched, so server-side changes that were already present remain visible as drift instead of being accepted
+
+### Changed
+
+- `git_drift_ignore_paths` entries are appended through the same append-if-missing helper as the automatically derived exclude entries, replacing one `run()` per configured path with a single batched call and avoiding duplicate lines in `.git/info/exclude`
+
 ### Fixed
 
 - `git-drift:init` no longer leaves a `.git` without a HEAD behind when one of its own steps fails (an SSH host key the server has not accepted, a missing deploy key). Init failures are non-fatal by design, so such a release was reported as "already initialized" on every later deploy, while `git-drift:check` read the whole release as untracked drift and then aborted the deployment with `fatal: ambiguous argument 'HEAD'`. The baseline is now built in a temporary Git directory and moved into place only once HEAD resolves, and a HEAD-less `.git` left behind by an earlier version is replaced by the next `git-drift:init`
