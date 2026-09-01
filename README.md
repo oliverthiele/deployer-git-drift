@@ -44,6 +44,10 @@ after('deploy:symlink', 'git-drift:init');
 before('deploy:vendors', 'git-drift:check');
 ```
 
+That single `require` is all that is needed. The recipe loads its own classes when no
+Composer autoloader is in play, so it works with a project-local Deployer as well as with
+a global installation or `deployer.phar`.
+
 Hooks are opt-in by design — the recipe registers tasks only, not automatic hooks.
 
 ## Configuration

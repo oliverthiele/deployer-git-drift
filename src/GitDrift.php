@@ -6,6 +6,21 @@ namespace Deployer;
 
 use OliverThiele\DeployerGitDrift\GitDriftIndexPlanner;
 
+/**
+ * The recipe is loaded by requiring this file directly (see README), which does not run
+ * Composer's autoloader. In a project-local Deployer install that is harmless — the
+ * project's own vendor/autoload.php is already active — but when Deployer runs from a
+ * phar or a global installation, nothing maps this package's namespace. The classes below
+ * would then never load, and the failure would surface only at the first
+ * gitDriftReconcileIndex() call, as a fatal "class not found" in mid-deployment rather
+ * than at require time. Loading them as a fallback keeps the single require in deploy.php
+ * sufficient in either setup; where an autoloader can supply them, it stays in charge.
+ */
+if (!class_exists(GitDriftIndexPlanner::class)) {
+    require_once __DIR__ . '/GitDriftIndexPlan.php';
+    require_once __DIR__ . '/GitDriftIndexPlanner.php';
+}
+
 set('git_drift_abort_on_drift', false);
 set('git_drift_ignore_paths', []);
 set('git_drift_skip_worktree_paths', []);

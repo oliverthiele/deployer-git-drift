@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `git-drift:init` no longer leaves a `.git` without a HEAD behind when one of its own steps fails (missing deploy key on the server, empty `{{branch}}`). Init failures are non-fatal by design, so such a release was reported as "already initialized" on every later deploy, while `git-drift:check` read the whole release as untracked drift and then aborted the deployment with `fatal: ambiguous argument 'HEAD'`. The baseline is now built in a temporary Git directory and moved into place only once HEAD resolves, and a HEAD-less `.git` left behind by an earlier version is replaced by the next `git-drift:init`
 - `git-drift:check` and `git-drift:status` verify that HEAD resolves instead of only testing for a `.git` directory, and skip with a notice when it does not
+- The recipe no longer depends on the project's Composer autoloader being active. Requiring `src/GitDrift.php` as documented was not enough under a globally installed Deployer or `deployer.phar`, where nothing maps the package namespace: `GitDriftIndexPlanner`, extracted in 0.2.0, then failed to load and the deployment died with a fatal "class not found" at the first drift reconciliation. The classes are loaded as a fallback when no autoloader can supply them
 
 ## [0.2.1] — 2026-07-02
 
