@@ -6,6 +6,21 @@ namespace Deployer;
 
 use OliverThiele\DeployerGitDrift\GitDriftIndexPlanner;
 
+/**
+ * The recipe is loaded by requiring this file directly (see README), which does not run
+ * Composer's autoloader. In a project-local Deployer install that is harmless — the
+ * project's own vendor/autoload.php is already active — but when Deployer runs from a
+ * phar or a global installation, nothing maps this package's namespace. The classes below
+ * would then never load, and the failure would surface only at the first
+ * gitDriftReconcileIndex() call, as a fatal "class not found" in mid-deployment rather
+ * than at require time. Loading them as a fallback keeps the single require in deploy.php
+ * sufficient in either setup; where an autoloader can supply them, it stays in charge.
+ */
+if (!class_exists(GitDriftIndexPlanner::class)) {
+    require_once __DIR__ . '/GitDriftIndexPlan.php';
+    require_once __DIR__ . '/GitDriftIndexPlanner.php';
+}
+
 set('git_drift_abort_on_drift', false);
 set('git_drift_ignore_paths', []);
 set('git_drift_skip_worktree_paths', []);
@@ -39,6 +54,13 @@ function gitDriftReconcileIndex(string $path): void
     $manualSkipWorktreePaths = array_map('strval', (array)get('git_drift_skip_worktree_paths', []));
 
     $plan = GitDriftIndexPlanner::plan($sharedPaths, $trackedFiles, $archivedFiles, $manualSkipWorktreePaths);
+
+    // Without this the entry would simply have no effect, and the files it was meant to
+    // cover would keep being reported as drift with nothing pointing at the cause.
+    if ($plan->unmatchedSkipWorktreePaths !== []) {
+        writeln('<comment>⚠ git_drift_skip_worktree_paths covers no tracked file and was ignored: '
+            . implode(', ', $plan->unmatchedSkipWorktreePaths) . '</comment>');
+    }
 
     gitDriftAppendMissingExcludeEntries($path, $plan->excludeEntries);
     gitDriftRestoreIndexEntries($path, $plan->skipWorktreePaths, $trackedFileInfo);
@@ -142,23 +164,77 @@ function gitDriftMarkSkipWorktree(string $path, array $skipWorktreePaths): void
     run('printf \'%s\' ' . escapeshellarg($payload) . " | git -C $path update-index --skip-worktree --stdin");
 }
 
+/**
+ * A release can hold a .git that is unusable rather than absent, so testing for the
+ * directory alone is not enough — see gitDriftCreateBaseline() for how that happens.
+ * Without a resolvable HEAD, `git status` reports the whole release as untracked and
+ * `git diff HEAD` aborts with "ambiguous argument 'HEAD'".
+ */
+function gitDriftHasBaseline(string $path): bool
+{
+    return test("[ -d \"$path/.git\" ] && git -C \"$path\" rev-parse --verify --quiet HEAD > /dev/null 2>&1");
+}
+
+/**
+ * Builds the drift baseline in a temporary Git directory and moves it into place only
+ * once HEAD resolves.
+ *
+ * Init failures are deliberately non-fatal — drift tracking must never break a
+ * deployment — so every step has to leave the release in a state the next run can
+ * recover from. Initializing .git in place does not: a fetch that cannot reach the
+ * repository (an SSH host key the server has not accepted yet, a missing deploy key)
+ * leaves a repository behind that never got a HEAD, which init then reports as "already
+ * initialized" while check reads the entire release as drift and aborts. Nothing is written to .git here until the baseline is complete,
+ * and a HEAD-less .git left behind by an older version is replaced on the way.
+ *
+ * core.worktree is unset again because --work-tree records it as an absolute path; the
+ * result is then byte-for-byte what a plain `git init` inside the release produces.
+ */
+function gitDriftCreateBaseline(string $path): void
+{
+    $git = "git --git-dir=$path/.git.tmp --work-tree=$path";
+
+    run("rm -rf $path/.git.tmp");
+    run("$git init --quiet");
+    run("$git remote add origin {{repository}}");
+    run("$git fetch origin {{branch}} --depth=1 --quiet");
+    run("$git reset FETCH_HEAD --quiet");
+
+    if (!test("$git rev-parse --verify --quiet HEAD > /dev/null 2>&1")) {
+        throw new \RuntimeException(sprintf(
+            'fetched branch "%s" produced no HEAD',
+            (string)get('branch', '')
+        ));
+    }
+
+    run("git --git-dir=$path/.git.tmp config --unset core.worktree");
+    run("rm -rf $path/.git && mv $path/.git.tmp $path/.git");
+}
+
+/**
+ * The three steps that turn a release directory into a tracked baseline: the repository
+ * itself, the project's own ignore paths, and the index reconciliation that suppresses
+ * shared and export-ignored files.
+ *
+ * git_drift_ignore_paths goes through the same append-if-missing helper as the
+ * automatically derived entries, so re-running this over an existing release neither
+ * duplicates exclude lines nor costs one round-trip per configured path.
+ */
+function gitDriftApplyBaseline(string $path): void
+{
+    gitDriftCreateBaseline($path);
+    gitDriftAppendMissingExcludeEntries($path, array_map('strval', (array)get('git_drift_ignore_paths', [])));
+    gitDriftReconcileIndex($path);
+}
+
 task('git-drift:init', function (): void {
     try {
-        if (test('[ -d "{{release_path}}/.git" ]')) {
+        if (gitDriftHasBaseline('{{release_path}}')) {
             writeln('<info>✓ Git drift tracking already initialized</info>');
             return;
         }
 
-        run('git -C {{release_path}} init --quiet');
-        run('git -C {{release_path}} remote add origin {{repository}}');
-        run('git -C {{release_path}} fetch origin {{branch}} --depth=1 --quiet');
-        run('git -C {{release_path}} reset FETCH_HEAD --quiet');
-
-        foreach ((array)get('git_drift_ignore_paths') as $ignoredPath) {
-            run('echo ' . escapeshellarg((string)$ignoredPath) . ' >> {{release_path}}/.git/info/exclude');
-        }
-
-        gitDriftReconcileIndex('{{release_path}}');
+        gitDriftApplyBaseline('{{release_path}}');
 
         writeln('<info>✓ Git drift tracking initialized</info>');
     } catch (\Throwable $exception) {
@@ -172,8 +248,8 @@ task('git-drift:check', function (): void {
         return;
     }
 
-    if (!test('[ -d "{{current_path}}/.git" ]')) {
-        writeln('<comment>⚠ Git not initialized in current release — drift check skipped.</comment>');
+    if (!gitDriftHasBaseline('{{current_path}}')) {
+        writeln('<comment>⚠ No usable Git baseline in current release — drift check skipped.</comment>');
         writeln('<comment>After the first deploy with git-drift:init, subsequent deployments will be checked.</comment>');
         return;
     }
@@ -224,8 +300,8 @@ task('git-drift:status', function (): void {
         return;
     }
 
-    if (!test('[ -d "{{current_path}}/.git" ]')) {
-        writeln('<comment>⚠ Git not initialized in current release.</comment>');
+    if (!gitDriftHasBaseline('{{current_path}}')) {
+        writeln('<comment>⚠ No usable Git baseline in current release.</comment>');
         writeln('<comment>Deploy once with git-drift:init enabled to start tracking.</comment>');
         return;
     }
@@ -243,3 +319,24 @@ task('git-drift:status', function (): void {
         writeln($diffStatOutput);
     }
 })->desc('Show current server drift status without deploying');
+
+task('git-drift:reset', function (): void {
+    if (!test('[ -e "{{current_path}}" ]')) {
+        throw new \RuntimeException('No current release — nothing to reset.');
+    }
+
+    // Unlike init this is invoked deliberately, so a failure must surface instead of
+    // being swallowed: the whole point of the task is to find out whether the baseline
+    // can be built at all.
+    gitDriftApplyBaseline('{{current_path}}');
+
+    writeln('<info>✓ Git drift baseline rebuilt from {{branch}}</info>');
+
+    // Only the baseline is rebuilt, never the working tree — server-side changes that
+    // were already there stay visible as drift. Saying so here keeps the task from
+    // being mistaken for a way to accept them.
+    $statusOutput = run('git -C {{current_path}} status --porcelain --ignore-submodules=all');
+    if (!empty(trim($statusOutput))) {
+        writeln('<comment>⚠ The release still differs from the rebuilt baseline — run git-drift:status for details.</comment>');
+    }
+})->desc('Rebuild the drift baseline of the current release without deploying');

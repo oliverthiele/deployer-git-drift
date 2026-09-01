@@ -9,10 +9,12 @@ final class GitDriftIndexPlan
     /**
      * @param string[] $skipWorktreePaths Tracked files to mark with `git update-index --skip-worktree`
      * @param string[] $excludeEntries Entries to append to `.git/info/exclude`
+     * @param string[] $unmatchedSkipWorktreePaths Configured paths that cover no tracked file
      */
     public function __construct(
         public readonly array $skipWorktreePaths,
         public readonly array $excludeEntries,
+        public readonly array $unmatchedSkipWorktreePaths = [],
     ) {
     }
 }
