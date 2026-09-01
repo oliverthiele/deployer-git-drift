@@ -174,10 +174,10 @@ function gitDriftHasBaseline(string $path): bool
  *
  * Init failures are deliberately non-fatal — drift tracking must never break a
  * deployment — so every step has to leave the release in a state the next run can
- * recover from. Initializing .git in place does not: a fetch that fails (missing deploy
- * key on the server, empty {{branch}}) leaves a repository behind that never got a HEAD,
- * which init then reports as "already initialized" while check reads the entire release
- * as drift and aborts. Nothing is written to .git here until the baseline is complete,
+ * recover from. Initializing .git in place does not: a fetch that cannot reach the
+ * repository (an SSH host key the server has not accepted yet, a missing deploy key)
+ * leaves a repository behind that never got a HEAD, which init then reports as "already
+ * initialized" while check reads the entire release as drift and aborts. Nothing is written to .git here until the baseline is complete,
  * and a HEAD-less .git left behind by an older version is replaced on the way.
  *
  * core.worktree is unset again because --work-tree records it as an absolute path; the
