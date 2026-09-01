@@ -64,7 +64,7 @@ final class GitDriftIndexPlannerTest extends TestCase
         self::assertSame(['data/.gitkeep'], $plan->skipWorktreePaths);
     }
 
-    public function testManualSkipWorktreePathsAreAlwaysIncluded(): void
+    public function testConfiguredFilePathIsMarkedSkipWorktree(): void
     {
         $plan = GitDriftIndexPlanner::plan(
             sharedPaths: [],
@@ -74,6 +74,71 @@ final class GitDriftIndexPlannerTest extends TestCase
         );
 
         self::assertSame(['public/.htaccess'], $plan->skipWorktreePaths);
+        self::assertSame([], $plan->unmatchedSkipWorktreePaths);
+    }
+
+    public function testConfiguredDirectoryCoversEveryTrackedFileBeneathIt(): void
+    {
+        $plan = GitDriftIndexPlanner::plan(
+            sharedPaths: [],
+            trackedFiles: ['Build/webpack.config.js', 'Build/src/app.js', 'public/index.php'],
+            archivedFiles: ['Build/webpack.config.js', 'Build/src/app.js', 'public/index.php'],
+            manualSkipWorktreePaths: ['Build'],
+        );
+
+        self::assertSame(['Build/webpack.config.js', 'Build/src/app.js'], $plan->skipWorktreePaths);
+        self::assertSame([], $plan->unmatchedSkipWorktreePaths);
+    }
+
+    public function testConfiguredPathIsNormalizedLikeASharedPath(): void
+    {
+        $plan = GitDriftIndexPlanner::plan(
+            sharedPaths: [],
+            trackedFiles: ['Build/webpack.config.js'],
+            archivedFiles: ['Build/webpack.config.js'],
+            manualSkipWorktreePaths: ['/Build/'],
+        );
+
+        self::assertSame(['Build/webpack.config.js'], $plan->skipWorktreePaths);
+    }
+
+    public function testConfiguredPathDoesNotMatchByPrefixWithoutSlashBoundary(): void
+    {
+        $plan = GitDriftIndexPlanner::plan(
+            sharedPaths: [],
+            trackedFiles: ['Build-cache/app.js'],
+            archivedFiles: ['Build-cache/app.js'],
+            manualSkipWorktreePaths: ['Build'],
+        );
+
+        self::assertSame([], $plan->skipWorktreePaths);
+        self::assertSame(['Build'], $plan->unmatchedSkipWorktreePaths);
+    }
+
+    public function testConfiguredPathCoveringNoTrackedFileIsReportedInsteadOfMarked(): void
+    {
+        $plan = GitDriftIndexPlanner::plan(
+            sharedPaths: [],
+            trackedFiles: ['public/index.php'],
+            archivedFiles: ['public/index.php'],
+            manualSkipWorktreePaths: ['public/.htacces', 'public/index.php'],
+        );
+
+        // The typo would make `git update-index` fail on a path that is not in the index.
+        self::assertSame(['public/index.php'], $plan->skipWorktreePaths);
+        self::assertSame(['public/.htacces'], $plan->unmatchedSkipWorktreePaths);
+    }
+
+    public function testFileMatchedByBothAConfiguredPathAndTheArchiveIsListedOnce(): void
+    {
+        $plan = GitDriftIndexPlanner::plan(
+            sharedPaths: [],
+            trackedFiles: ['Build/app.js'],
+            archivedFiles: [],
+            manualSkipWorktreePaths: ['Build'],
+        );
+
+        self::assertSame(['Build/app.js'], $plan->skipWorktreePaths);
     }
 
     public function testCleanFileIsNotMarkedSkipWorktree(): void

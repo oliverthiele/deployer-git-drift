@@ -55,6 +55,13 @@ function gitDriftReconcileIndex(string $path): void
 
     $plan = GitDriftIndexPlanner::plan($sharedPaths, $trackedFiles, $archivedFiles, $manualSkipWorktreePaths);
 
+    // Without this the entry would simply have no effect, and the files it was meant to
+    // cover would keep being reported as drift with nothing pointing at the cause.
+    if ($plan->unmatchedSkipWorktreePaths !== []) {
+        writeln('<comment>⚠ git_drift_skip_worktree_paths covers no tracked file and was ignored: '
+            . implode(', ', $plan->unmatchedSkipWorktreePaths) . '</comment>');
+    }
+
     gitDriftAppendMissingExcludeEntries($path, $plan->excludeEntries);
     gitDriftRestoreIndexEntries($path, $plan->skipWorktreePaths, $trackedFileInfo);
     gitDriftMarkSkipWorktree($path, $plan->skipWorktreePaths);
