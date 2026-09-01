@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Documented that the automatic export-ignore detection only sees `.gitattributes` and Deployer's shared paths, so exclude mechanisms contributed by other recipes (rsync `--exclude` lists, deploy-time cleanup) have to be mirrored into `.gitattributes` or `git_drift_skip_worktree_paths`, including the exact-path requirement of the latter
 - `git_drift_ignore_paths` entries are appended through the same append-if-missing helper as the automatically derived exclude entries, replacing one `run()` per configured path with a single batched call and avoiding duplicate lines in `.git/info/exclude`
 
 ### Fixed
