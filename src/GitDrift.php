@@ -43,7 +43,7 @@ set('git_drift_skip_worktree_paths', []);
  */
 function gitDriftReconcileIndex(string $path): void
 {
-    $sharedPaths = array_map('strval', array_merge((array)get('shared_dirs', []), (array)get('shared_files', [])));
+    $sharedPaths = array_merge(gitDriftConfiguredPaths('shared_dirs'), gitDriftConfiguredPaths('shared_files'));
 
     // "git ls-tree -r HEAD" (mode, type, hash, path) doubles as the plain tracked-file list
     // for the planner and as the source of hashes needed to restore index entries below —
@@ -51,7 +51,7 @@ function gitDriftReconcileIndex(string $path): void
     $trackedFileInfo = gitDriftParseTrackedFiles(run("git -C $path ls-tree -r HEAD 2>/dev/null || true"));
     $trackedFiles = array_keys($trackedFileInfo);
     $archivedFiles = gitDriftLines(run("git -C $path archive HEAD 2>/dev/null | tar -t 2>/dev/null || true"));
-    $manualSkipWorktreePaths = array_map('strval', (array)get('git_drift_skip_worktree_paths', []));
+    $manualSkipWorktreePaths = gitDriftConfiguredPaths('git_drift_skip_worktree_paths');
 
     $plan = GitDriftIndexPlanner::plan($sharedPaths, $trackedFiles, $archivedFiles, $manualSkipWorktreePaths);
 
@@ -62,9 +62,34 @@ function gitDriftReconcileIndex(string $path): void
             . implode(', ', $plan->unmatchedSkipWorktreePaths) . '</comment>');
     }
 
-    gitDriftAppendMissingExcludeEntries($path, $plan->excludeEntries);
+    gitDriftAppendMissingExcludeEntries($path, [...$plan->excludeEntries, ...GIT_DRIFT_RELEASE_METADATA_FILES]);
     gitDriftRestoreIndexEntries($path, $plan->skipWorktreePaths, $trackedFileInfo);
     gitDriftMarkSkipWorktree($path, $plan->skipWorktreePaths);
+}
+
+/**
+ * Files Deployer itself writes into every release. They are never part of the
+ * repository, so without an exclude entry each one is reported as untracked drift.
+ */
+const GIT_DRIFT_RELEASE_METADATA_FILES = ['REVISION'];
+
+/**
+ * Reads a list of paths from the configuration with its placeholders resolved.
+ *
+ * get() returns the configured value as written, so a path such as
+ * "{{typo3/public_dir}}/fileadmin" (a shared_dirs default of Deployer's TYPO3 recipe) would
+ * reach the planner verbatim and never match a tracked "public/fileadmin/…". run() resolves
+ * the same placeholders in the commands it executes, which is why the exclude file
+ * received the resolved path while the comparison against it kept failing.
+ *
+ * @return string[]
+ */
+function gitDriftConfiguredPaths(string $name): array
+{
+    return array_map(
+        static fn (mixed $path): string => parse(is_scalar($path) ? (string)$path : ''),
+        (array)get($name, []),
+    );
 }
 
 /**
@@ -223,7 +248,7 @@ function gitDriftCreateBaseline(string $path): void
 function gitDriftApplyBaseline(string $path): void
 {
     gitDriftCreateBaseline($path);
-    gitDriftAppendMissingExcludeEntries($path, array_map('strval', (array)get('git_drift_ignore_paths', [])));
+    gitDriftAppendMissingExcludeEntries($path, gitDriftConfiguredPaths('git_drift_ignore_paths'));
     gitDriftReconcileIndex($path);
 }
 
