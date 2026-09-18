@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-09-18
+
 ### Fixed
 
 - Placeholders in `shared_dirs`, `shared_files`, `git_drift_skip_worktree_paths` and `git_drift_ignore_paths` are resolved before the paths are compared with the tracked files. `get()` returns them as written, so a shared path such as `{{typo3/public_dir}}/fileadmin` — a default of Deployer's TYPO3 recipe — never matched and every tracked file below it was reported as drift on each deployment: a shared file as a type change, the content of a shared directory as deleted. The exclude file received the resolved path through `run()`, so the same entries were also appended again on every run
