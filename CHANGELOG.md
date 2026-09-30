@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Build the drift baseline from the commit recorded in the release's `REVISION` file instead of the tip of the deployed branch. A push that landed while a deployment was running moved the baseline past the shipped code, and the next `git-drift:check` reported the difference between the two commits as server drift. Releases without a usable `REVISION` file still fall back to the branch
+
 ## [0.3.1] — 2026-09-18
 
 ### Fixed

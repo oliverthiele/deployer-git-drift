@@ -109,7 +109,7 @@ Once the cause is fixed, build the baseline without waiting for the next deploym
 dep git-drift:reset production
 ```
 
-This re-fetches the deployed branch and rebuilds the baseline from it. It does **not**
+This re-fetches the deployed commit and rebuilds the baseline from it. It does **not**
 accept existing server-side changes — only the baseline is rebuilt, never the working
 tree, so files that already differ keep showing up as drift afterwards.
 
@@ -134,7 +134,9 @@ Continue deployment and discard changes? [y/N]
 
 ## How it works
 
-After each deployment, `git-drift:init` runs `git init` in the release directory, fetches the deployed branch with `--depth=1`, and sets `FETCH_HEAD` as the baseline via `git reset`. Any subsequent server-side file modifications will appear as changes relative to this baseline.
+After each deployment, `git-drift:init` runs `git init` in the release directory, fetches the deployed commit with `--depth=1`, and sets `FETCH_HEAD` as the baseline via `git reset`. Any subsequent server-side file modifications will appear as changes relative to this baseline.
+
+The deployed commit is read from the `REVISION` file Deployer writes into every release, so a push that lands while a deployment is running does not move the baseline past the shipped code. Releases without a usable `REVISION` file fall back to the tip of the deployed branch. Fetching a single commit by its hash requires a Git host that serves reachable commits on request, as GitHub and GitLab do.
 
 On the very first deployment after adding this recipe, there is no previous release to compare against, so `git-drift:check` skips with a notice instead of checking anything. Drift detection becomes active starting with the deployment after that.
 

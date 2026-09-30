@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Deployer;
 
 use OliverThiele\DeployerGitDrift\GitDriftIndexPlanner;
+use OliverThiele\DeployerGitDrift\GitDriftRevision;
 
 /**
  * The recipe is loaded by requiring this file directly (see README), which does not run
@@ -19,6 +20,9 @@ use OliverThiele\DeployerGitDrift\GitDriftIndexPlanner;
 if (!class_exists(GitDriftIndexPlanner::class)) {
     require_once __DIR__ . '/GitDriftIndexPlan.php';
     require_once __DIR__ . '/GitDriftIndexPlanner.php';
+}
+if (!class_exists(GitDriftRevision::class)) {
+    require_once __DIR__ . '/GitDriftRevision.php';
 }
 
 set('git_drift_abort_on_drift', false);
@@ -212,28 +216,38 @@ function gitDriftHasBaseline(string $path): bool
  * initialized" while check reads the entire release as drift and aborts. Nothing is written to .git here until the baseline is complete,
  * and a HEAD-less .git left behind by an older version is replaced on the way.
  *
+ * The baseline is the commit recorded in the release's REVISION file — the code that was
+ * actually shipped. Fetching the branch instead picks up whatever was pushed while the
+ * deployment ran, and the next check reports that newer commit as server-side drift. The
+ * branch is only the fallback for releases without a usable REVISION file.
+ *
  * core.worktree is unset again because --work-tree records it as an absolute path; the
  * result is then byte-for-byte what a plain `git init` inside the release produces.
  */
-function gitDriftCreateBaseline(string $path): void
+function gitDriftCreateBaseline(string $path): string
 {
     $git = "git --git-dir=$path/.git.tmp --work-tree=$path";
+    $revision = GitDriftRevision::fromRevisionFile(run("cat $path/REVISION 2>/dev/null || true"));
+    $reference = $revision ?? (string)get('branch', '');
 
     run("rm -rf $path/.git.tmp");
     run("$git init --quiet");
     run("$git remote add origin {{repository}}");
-    run("$git fetch origin {{branch}} --depth=1 --quiet");
+    run("$git fetch origin " . escapeshellarg($reference) . ' --depth=1 --quiet');
     run("$git reset FETCH_HEAD --quiet");
 
     if (!test("$git rev-parse --verify --quiet HEAD > /dev/null 2>&1")) {
         throw new \RuntimeException(sprintf(
-            'fetched branch "%s" produced no HEAD',
-            (string)get('branch', '')
+            'fetched %s "%s" produced no HEAD',
+            $revision !== null ? 'revision' : 'branch',
+            $reference
         ));
     }
 
     run("git --git-dir=$path/.git.tmp config --unset core.worktree");
     run("rm -rf $path/.git && mv $path/.git.tmp $path/.git");
+
+    return $reference;
 }
 
 /**
@@ -244,12 +258,16 @@ function gitDriftCreateBaseline(string $path): void
  * git_drift_ignore_paths goes through the same append-if-missing helper as the
  * automatically derived entries, so re-running this over an existing release neither
  * duplicates exclude lines nor costs one round-trip per configured path.
+ *
+ * Returns the commit or branch the baseline was fetched from.
  */
-function gitDriftApplyBaseline(string $path): void
+function gitDriftApplyBaseline(string $path): string
 {
-    gitDriftCreateBaseline($path);
+    $reference = gitDriftCreateBaseline($path);
     gitDriftAppendMissingExcludeEntries($path, gitDriftConfiguredPaths('git_drift_ignore_paths'));
     gitDriftReconcileIndex($path);
+
+    return $reference;
 }
 
 task('git-drift:init', function (): void {
@@ -353,9 +371,9 @@ task('git-drift:reset', function (): void {
     // Unlike init this is invoked deliberately, so a failure must surface instead of
     // being swallowed: the whole point of the task is to find out whether the baseline
     // can be built at all.
-    gitDriftApplyBaseline('{{current_path}}');
+    $reference = gitDriftApplyBaseline('{{current_path}}');
 
-    writeln('<info>✓ Git drift baseline rebuilt from {{branch}}</info>');
+    writeln('<info>✓ Git drift baseline rebuilt from ' . $reference . '</info>');
 
     // Only the baseline is rebuilt, never the working tree — server-side changes that
     // were already there stay visible as drift. Saying so here keeps the task from
