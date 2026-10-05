@@ -136,6 +136,8 @@ Continue deployment and discard changes? [y/N]
 
 After each deployment, `git-drift:init` runs `git init` in the release directory, fetches the deployed commit with `--depth=1`, and sets `FETCH_HEAD` as the baseline via `git reset`. Any subsequent server-side file modifications will appear as changes relative to this baseline.
 
+The local branch in a release is always named `git-drift-baseline`, so `git status` on the server makes clear that this is a drift snapshot, not a working repository to commit or push from.
+
 The deployed commit is read from the `REVISION` file Deployer writes into every release, so a push that lands while a deployment is running does not move the baseline past the shipped code. Releases without a usable `REVISION` file fall back to the tip of the deployed branch. Fetching a single commit by its hash requires a Git host that serves reachable commits on request, as GitHub and GitLab do.
 
 On the very first deployment after adding this recipe, there is no previous release to compare against, so `git-drift:check` skips with a notice instead of checking anything. Drift detection becomes active starting with the deployment after that.
