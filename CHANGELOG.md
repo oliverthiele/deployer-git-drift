@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Name the local branch in a release `git-drift-baseline` instead of leaving it to the server's `init.defaultBranch` (usually `master`), so `git status` on the server shows at once that the repository is a drift snapshot and not a working copy. The branch is set with `git symbolic-ref`, which works with every Git version. No migration is needed: the recipe only reads HEAD, releases created by earlier versions keep working with their old branch name, and the next deployment or `git-drift:reset` uses the new name. Only external scripts that parse the branch name in a release, for example `On branch master` from `git status`, need to be adjusted
+
 ## [0.3.2] — 2026-09-30
 
 ### Fixed

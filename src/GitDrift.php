@@ -221,8 +221,16 @@ function gitDriftHasBaseline(string $path): bool
  * deployment ran, and the next check reports that newer commit as server-side drift. The
  * branch is only the fallback for releases without a usable REVISION file.
  *
+ * HEAD is pointed at a branch named git-drift-baseline before the reset creates it, so
+ * anyone running `git status` in a release sees at once that this is a drift snapshot and
+ * not a working repository. Without it the name would be whatever the server's
+ * init.defaultBranch says. symbolic-ref is used instead of `git init --initial-branch`,
+ * which needs Git 2.28 or later. Nothing in this recipe reads the branch name; every
+ * command works on HEAD, so releases initialized with another name keep working.
+ *
  * core.worktree is unset again because --work-tree records it as an absolute path; the
- * result is then byte-for-byte what a plain `git init` inside the release produces.
+ * result is then what a plain `git init` inside the release produces, apart from the
+ * branch name.
  */
 function gitDriftCreateBaseline(string $path): string
 {
@@ -232,6 +240,7 @@ function gitDriftCreateBaseline(string $path): string
 
     run("rm -rf $path/.git.tmp");
     run("$git init --quiet");
+    run("$git symbolic-ref HEAD refs/heads/git-drift-baseline");
     run("$git remote add origin {{repository}}");
     run("$git fetch origin " . escapeshellarg($reference) . ' --depth=1 --quiet');
     run("$git reset FETCH_HEAD --quiet");
